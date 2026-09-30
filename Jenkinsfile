@@ -46,6 +46,17 @@ pipeline {
         '''
     }
 }
+        stage('Cleanup Old GreenLeaf Images') {
+    steps {
+        sh '''
+            docker images \
+                'greenleaf-plant-store' \
+                --format '{{.Tag}}' |
+            grep -v "^${BUILD_NUMBER}$" |
+            xargs -r -I {} docker rmi greenleaf-plant-store:{} || true
+        '''
+    }
+}
     }
 
     post {
