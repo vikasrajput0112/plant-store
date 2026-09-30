@@ -19,24 +19,33 @@ pipeline {
             }
         }
 
-        stage('Test Docker Image') {
-            steps {
-                sh '''
-                    docker run -d \
-                        --name greenleaf-test-${BUILD_NUMBER} \
-                        -p 8081:80 \
-                        greenleaf-plant-store:${BUILD_NUMBER}
+       stage('Test Docker Image') {
+    steps {
+        sh '''
+            docker run -d \
+                --name greenleaf-test-${BUILD_NUMBER} \
+                -p 8081:80 \
+                greenleaf-plant-store:${BUILD_NUMBER}
 
-                    sleep 5
+            sleep 5
 
-                    curl -f http://localhost:8081
+            echo "===== Container Status ====="
+            docker ps -a | grep greenleaf-test-${BUILD_NUMBER} || true
 
-                    docker stop greenleaf-test-${BUILD_NUMBER}
-                    docker rm greenleaf-test-${BUILD_NUMBER}
-                '''
-            }
-        }
+            echo "===== Container Logs ====="
+            docker logs greenleaf-test-${BUILD_NUMBER} || true
 
+            echo "===== Docker Port ====="
+            docker port greenleaf-test-${BUILD_NUMBER} || true
+
+            echo "===== Curl Test ====="
+            curl -v http://localhost:8081 || true
+
+            docker stop greenleaf-test-${BUILD_NUMBER} || true
+            docker rm greenleaf-test-${BUILD_NUMBER} || true
+        '''
+    }
+}
     }
 
     post {
