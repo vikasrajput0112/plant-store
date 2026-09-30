@@ -2,6 +2,10 @@ pipeline {
 
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+    }
+
     stages {
 
         stage('Checkout') {
@@ -13,50 +17,85 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
+                    echo "===== Building Docker Image ====="
+
                     docker build \
                         -t greenleaf-plant-store:${BUILD_NUMBER} .
+
+                    echo "===== Image Created ====="
+
+                    docker images greenleaf-plant-store
                 '''
             }
         }
 
-       stage('Test Docker Image') {
-    steps {
-        sh '''
-            docker run -d \
-                --name greenleaf-test-${BUILD_NUMBER} \
-                -p 8081:80 \
-                greenleaf-plant-store:${BUILD_NUMBER}
+        stage('Test Docker Image') {
+            steps {
+                sh '''
+                    echo "===== Starting Test Container ====="
 
-            sleep 5
+                    docker run -d \
+                        --name greenleaf-test-${BUILD_NUMBER} \
+                        -p 80 \
+                        greenleaf-plant-store:${BUILD_NUMBER}
 
-            echo "===== Container Status ====="
-            docker ps -a | grep greenleaf-test-${BUILD_NUMBER} || true
+                    echo "===== Waiting for Nginx ====="
+                    sleep 5
 
-            echo "===== Container Logs ====="
-            docker logs greenleaf-test-${BUILD_NUMBER} || true
+                    echo "===== Container Status ====="
+                    docker ps -a | grep greenleaf-test-${BUILD_NUMBER} || true
 
-            echo "===== Docker Port ====="
-            docker port greenleaf-test-${BUILD_NUMBER} || true
+                    echo "===== Container Logs ====="
+                    docker logs greenleaf-test-${BUILD_NUMBER} || true
 
-            echo "===== Curl Test ====="
-            curl -v http://localhost:8081 || true
+                    echo "===== Container Port ====="
+                    docker port greenleaf-test-${BUILD_NUMBER} || true
 
-            docker stop greenleaf-test-${BUILD_NUMBER} || true
-            docker rm greenleaf-test-${BUILD_NUMBER} || true
-        '''
-    }
-}
+                    echo "===== Detecting Assigned Port ====="
+
+                    PORT=$(docker port greenleaf-test-${BUILD_NUMBER} 80/tcp | sed 's/.*://')
+
+                    echo "GreenLeaf is running on host port: ${PORT}"
+
+                    echo "===== Testing Website ====="
+
+                    curl -f http://localhost:${PORT}
+
+                    echo "===== Website Test Successful ====="
+                '''
+            }
+        }
+
+        stage('Cleanup Test Container') {
+            steps {
+                sh '''
+                    echo "===== Cleaning Test Container ====="
+
+                    docker stop greenleaf-test-${BUILD_NUMBER} 2>/dev/null || true
+
+                    docker rm greenleaf-test-${BUILD_NUMBER} 2>/dev/null || true
+                '''
+            }
+        }
+
         stage('Cleanup Old GreenLeaf Images') {
-    steps {
-        sh '''
-            docker images \
-                'greenleaf-plant-store' \
-                --format '{{.Tag}}' |
-            grep -v "^${BUILD_NUMBER}$" |
-            xargs -r -I {} docker rmi greenleaf-plant-store:{} || true
-        '''
-    }
-}
+            steps {
+                sh '''
+                    echo "===== Cleaning Old GreenLeaf Images ====="
+
+                    docker images \
+                        'greenleaf-plant-store' \
+                        --format '{{.Tag}}' |
+                    grep -v "^${BUILD_NUMBER}$" |
+                    xargs -r -I {} docker rmi \
+                        greenleaf-plant-store:{} || true
+
+                    echo "===== Remaining GreenLeaf Images ====="
+
+                    docker images greenleaf-plant-store
+                '''
+            }
+        }
     }
 
     post {
